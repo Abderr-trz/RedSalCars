@@ -38,3 +38,5 @@ next-env.d.ts
 *.backup.txt
 test.py
 *.jpg
+public/models/mercedes/mercedes-amg-gt.glb
+

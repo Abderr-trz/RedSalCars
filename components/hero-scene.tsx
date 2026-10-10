@@ -20,12 +20,13 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 
 /* ─── Configuration ─── */
 
-const MODEL_URL = "/models/mercedes/Mercedes+AMG+GT.fbx";
-const TIRE_TEXTURE_URL = "/models/mercedes/tire7.jpg";
+const DEFAULT_MODEL_URL =
+  process.env.NEXT_PUBLIC_CAR_MODEL_URL || "/models/spectral-gt-rs.glb";
 
 export const COLOR_PALETTE = [
   { id: "red", name: "Rouge Carmine", hex: "#9a121c" },
@@ -47,7 +48,7 @@ class SceneErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error) {
-    console.error("Mercedes showroom failed to load:", error);
+    console.error("Showroom 3D error:", error);
   }
 
   render() {
@@ -72,7 +73,7 @@ function LoadingOverlay({ ready }: { ready: boolean }) {
           style={{ transform: `scaleX(${Math.max(progress, 4) / 100})` }}
         />
       </div>
-      <p>Chargement du modèle Mercedes AMG GT</p>
+      <p>Chargement du modèle 3D</p>
       <strong>{Math.round(progress)}%</strong>
     </div>
   );
@@ -84,9 +85,9 @@ function materialList(material: THREE.Material | THREE.Material[]) {
   return Array.isArray(material) ? material : [material];
 }
 
-/* ─── Mercedes AMG GT Model (FBX) ─── */
+/* ─── 3D Car Model Loader ─── */
 
-function MercedesModel({
+function CarModel({
   onReady,
   bodyColor,
   isMobile,
@@ -95,37 +96,46 @@ function MercedesModel({
   bodyColor: string;
   isMobile: boolean;
 }) {
-  const source = useLoader(FBXLoader, MODEL_URL, (loader) => {
-    loader.setResourcePath("/models/mercedes/");
-  });
-  const tireTexture = useLoader(THREE.TextureLoader, TIRE_TEXTURE_URL);
+  const modelUrl = DEFAULT_MODEL_URL;
+  const isFbx = modelUrl.toLowerCase().endsWith(".fbx");
+
+  const source = useLoader(
+    isFbx ? FBXLoader : (GLTFLoader as any),
+    modelUrl,
+    (loader: any) => {
+      if (isFbx && loader.setResourcePath) {
+        loader.setResourcePath("/models/mercedes/");
+      }
+    }
+  );
+
   const bodyMaterialsRef = useRef<THREE.MeshPhysicalMaterial[]>([]);
 
   const model = useMemo(() => {
-    /* Reset body materials cache */
     bodyMaterialsRef.current = [];
+    const rawObject = isFbx
+      ? (source as THREE.Group)
+      : (source as any).scene || (source as THREE.Group);
 
-    /* Configure tire texture */
-    tireTexture.colorSpace = THREE.SRGBColorSpace;
-    tireTexture.wrapS = THREE.RepeatWrapping;
-    tireTexture.wrapT = THREE.RepeatWrapping;
-    tireTexture.repeat.set(2, 2);
-    tireTexture.anisotropy = 8;
+    const clone = rawObject.clone(true);
 
-    const clone = source.clone(true);
-
-    /* Traverse all meshes and convert to PBR materials */
-    clone.traverse((object) => {
+    /* Traverse all meshes and configure PBR materials */
+    clone.traverse((object: THREE.Object3D) => {
       if (!(object instanceof THREE.Mesh)) return;
       object.frustumCulled = true;
       object.castShadow = true;
       object.receiveShadow = true;
 
       const enhanced = materialList(object.material).map((sourceMaterial) => {
-        const semanticName = `${object.name} ${sourceMaterial.name}`.toLowerCase();
+        const semanticName =
+          `${object.name} ${sourceMaterial.name}`.toLowerCase();
 
-        // 1. Car body paint (AMG_GT_Mango_Gr / body)
-        if (/amg_gt_mango_gr|body|paint|carrosserie/.test(semanticName)) {
+        // 1. Car body paint
+        if (
+          /clearcoat|amg_gt_mango_gr|body|paint|carrosserie|spectral blue/.test(
+            semanticName
+          )
+        ) {
           const pbrBody = new THREE.MeshPhysicalMaterial({
             color: new THREE.Color(bodyColor),
             metalness: 0.84,
@@ -138,78 +148,7 @@ function MercedesModel({
           return pbrBody;
         }
 
-        // 2. Rubber tires
-        if (/tire|rubber|pneu/.test(semanticName)) {
-          return new THREE.MeshStandardMaterial({
-            map: tireTexture,
-            color: new THREE.Color("#222325"),
-            metalness: 0.0,
-            roughness: 0.85,
-            envMapIntensity: 0.8,
-          });
-        }
-
-        // 3. Chrome / Wheels / Rims / Brake Discs
-        if (/chrome|silver|rim|wheel|brake_discs/.test(semanticName)) {
-          return new THREE.MeshStandardMaterial({
-            color: new THREE.Color("#d5d8dc"),
-            metalness: 0.92,
-            roughness: 0.16,
-            envMapIntensity: 2.2,
-          });
-        }
-
-        // 4. Windows and windshield glass
-        if (/windowglass|glass|windshield/.test(semanticName)) {
-          return new THREE.MeshPhysicalMaterial({
-            color: new THREE.Color("#111822"),
-            transparent: true,
-            opacity: 0.62,
-            roughness: 0.06,
-            metalness: 0.2,
-            envMapIntensity: 2.5,
-          });
-        }
-
-        // 5. Carbon fiber elements (mirrors, spoiler, roof)
-        if (/carbon/.test(semanticName)) {
-          return new THREE.MeshStandardMaterial({
-            color: new THREE.Color("#1c1d20"),
-            roughness: 0.45,
-            metalness: 0.5,
-            envMapIntensity: 1.2,
-          });
-        }
-
-        // 6. Yellow AMG brake calipers
-        if (/amg_brakes_yell/.test(semanticName)) {
-          return new THREE.MeshStandardMaterial({
-            color: new THREE.Color("#e2b123"),
-            roughness: 0.25,
-            metalness: 0.4,
-            envMapIntensity: 1.6,
-          });
-        }
-
-        // 7. Red taillights
-        if (/r_lights|tail_lamp/.test(semanticName)) {
-          return new THREE.MeshStandardMaterial({
-            color: new THREE.Color("#dc1414"),
-            emissive: new THREE.Color("#900000"),
-            emissiveIntensity: 0.5,
-            roughness: 0.18,
-            metalness: 0.2,
-          });
-        }
-
-        // 8. Dark trims / interior plastics
-        const sm = sourceMaterial as THREE.Material & { color?: THREE.Color };
-        return new THREE.MeshStandardMaterial({
-          color: sm.color ? sm.color.clone() : new THREE.Color("#141518"),
-          roughness: 0.65,
-          metalness: 0.2,
-          envMapIntensity: 1.2,
-        });
+        return sourceMaterial;
       });
 
       object.material = Array.isArray(object.material)
@@ -222,7 +161,6 @@ function MercedesModel({
     const initialSize = initialBox.getSize(new THREE.Vector3());
     const longestSide = Math.max(initialSize.x, initialSize.z);
 
-    // Responsive scaling: 4.6 units on mobile, 5.7 units on desktop
     const targetLength = isMobile ? 4.6 : 5.7;
     const scale = targetLength / Math.max(longestSide, 0.001);
     const center = initialBox.getCenter(new THREE.Vector3());
@@ -237,7 +175,7 @@ function MercedesModel({
     clone.updateMatrixWorld(true);
 
     return clone;
-  }, [source, tireTexture, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [source, isFbx, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Instant color change without re-cloning geometry */
   useEffect(() => {
@@ -249,11 +187,8 @@ function MercedesModel({
 
   useEffect(() => {
     onReady();
-  }, [model, onReady]);
+  }, [onReady]);
 
-  /* Responsive car position and rotation */
-  // On mobile: perfectly centered at [0, 0, 0] with slight 3/4 angle
-  // On desktop: offset to the right at [0.9, 0, -0.25]
   const carPosition: [number, number, number] = isMobile
     ? [0, 0.01, 0]
     : [0.9, 0.01, -0.25];
@@ -339,8 +274,8 @@ function Showroom({
       {/* Front fill light — cool crisp white */}
       <pointLight position={[0, 2.2, 6]} intensity={28} color="#e6f0fa" />
 
-      {/* The Mercedes AMG GT */}
-      <MercedesModel
+      {/* The 3D Car Model */}
+      <CarModel
         onReady={onReady}
         bodyColor={bodyColor}
         isMobile={isMobile}
@@ -524,4 +459,7 @@ export default function HeroScene() {
   );
 }
 
-useLoader.preload(FBXLoader, MODEL_URL);
+useLoader.preload(
+  DEFAULT_MODEL_URL.toLowerCase().endsWith(".fbx") ? FBXLoader : (GLTFLoader as any),
+  DEFAULT_MODEL_URL
+);

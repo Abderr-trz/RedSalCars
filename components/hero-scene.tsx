@@ -20,11 +20,11 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { CompressedFBXLoader } from "@/lib/compressed-fbx-loader";
 
 /* ─── Configuration ─── */
 
-const DEFAULT_MODEL_URL = "/models/mercedes/Mercedes+AMG+GT.fbx";
+const DEFAULT_MODEL_URL = "/models/mercedes/Mercedes+AMG+GT.fbx.gz";
 const TIRE_TEXTURE_URL = "/models/mercedes/textures/textures/tire7.jpg";
 
 export const COLOR_PALETTE = [
@@ -96,7 +96,7 @@ function CarModel({
   isMobile: boolean;
 }) {
   const modelUrl = DEFAULT_MODEL_URL;
-  const source = useLoader(FBXLoader, modelUrl, (loader) => {
+  const source = useLoader(CompressedFBXLoader, modelUrl, (loader) => {
     loader.setResourcePath("/models/mercedes/");
   });
   const tireTexture = useLoader(THREE.TextureLoader, TIRE_TEXTURE_URL);
@@ -464,4 +464,4 @@ export default function HeroScene() {
   );
 }
 
-useLoader.preload(FBXLoader, DEFAULT_MODEL_URL);
+useLoader.preload(CompressedFBXLoader, DEFAULT_MODEL_URL);

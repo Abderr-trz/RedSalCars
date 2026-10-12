@@ -7,6 +7,7 @@ export default function Template({ children }: Readonly<{ children: React.ReactN
         .showroom-shell { position: relative; width: 100%; height: 100%; overflow: hidden; }
         .model-loader { position: absolute; inset: 0; z-index: 4; display: grid; place-content: center; justify-items: center; gap: 10px; background: #08090b; opacity: 0; visibility: hidden; transition: opacity .45s ease, visibility .45s ease; }
         .model-loader.visible { opacity: 1; visibility: visible; }
+        .model-loader:not(.visible) { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; transition: none; }
         .model-loader-track { width: min(280px, 58vw); height: 1px; overflow: hidden; background: rgba(255,255,255,.17); }
         .model-loader-track span { display: block; width: 100%; height: 100%; transform-origin: left; background: #a51e25; transition: transform .25s ease; }
         .model-loader p { margin: 8px 0 0; color: #c8cdd2; font-size: 11px; letter-spacing: .13em; }
@@ -20,7 +21,7 @@ export default function Template({ children }: Readonly<{ children: React.ReactN
           .hero h1 { font-size: clamp(56px, 6.5vw, 104px); }
         }
         @media (max-width: 700px) {
-          .hero-canvas { inset: 155px -75% 125px -20%; }
+          .hero-canvas { inset: 155px 0 125px; }
           .hero-vignette { background: linear-gradient(180deg, rgba(8,9,11,.78), transparent 38%, rgba(8,9,11,.92) 78%), linear-gradient(90deg, rgba(8,9,11,.52), transparent 72%); }
           .availability { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
           .availability label, .availability button { min-width: 0; }

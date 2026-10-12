@@ -20,13 +20,12 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 
 /* ─── Configuration ─── */
 
-const DEFAULT_MODEL_URL =
-  process.env.NEXT_PUBLIC_CAR_MODEL_URL || "/models/spectral-gt-rs.glb";
+const DEFAULT_MODEL_URL = "/models/mercedes/Mercedes+AMG+GT.fbx";
+const TIRE_TEXTURE_URL = "/models/mercedes/textures/textures/tire7.jpg";
 
 export const COLOR_PALETTE = [
   { id: "red", name: "Rouge Carmine", hex: "#9a121c" },
@@ -59,8 +58,8 @@ class SceneErrorBoundary extends Component<
 /* ─── Loading Overlay ─── */
 
 function LoadingOverlay({ ready }: { ready: boolean }) {
-  const { active, progress } = useProgress();
-  const visible = active || !ready;
+  const { progress } = useProgress();
+  const visible = !ready;
 
   return (
     <div
@@ -97,27 +96,22 @@ function CarModel({
   isMobile: boolean;
 }) {
   const modelUrl = DEFAULT_MODEL_URL;
-  const isFbx = modelUrl.toLowerCase().endsWith(".fbx");
-
-  const source = useLoader(
-    isFbx ? FBXLoader : (GLTFLoader as any),
-    modelUrl,
-    (loader: any) => {
-      if (isFbx && loader.setResourcePath) {
-        loader.setResourcePath("/models/mercedes/");
-      }
-    }
-  );
+  const source = useLoader(FBXLoader, modelUrl, (loader) => {
+    loader.setResourcePath("/models/mercedes/");
+  });
+  const tireTexture = useLoader(THREE.TextureLoader, TIRE_TEXTURE_URL);
 
   const bodyMaterialsRef = useRef<THREE.MeshPhysicalMaterial[]>([]);
 
   const model = useMemo(() => {
     bodyMaterialsRef.current = [];
-    const rawObject = isFbx
-      ? (source as THREE.Group)
-      : (source as any).scene || (source as THREE.Group);
+    tireTexture.colorSpace = THREE.SRGBColorSpace;
+    tireTexture.wrapS = THREE.RepeatWrapping;
+    tireTexture.wrapT = THREE.RepeatWrapping;
+    tireTexture.repeat.set(2, 2);
+    tireTexture.anisotropy = 8;
 
-    const clone = rawObject.clone(true);
+    const clone = (source as THREE.Group).clone(true);
 
     /* Traverse all meshes and configure PBR materials */
     clone.traverse((object: THREE.Object3D) => {
@@ -129,6 +123,17 @@ function CarModel({
       const enhanced = materialList(object.material).map((sourceMaterial) => {
         const semanticName =
           `${object.name} ${sourceMaterial.name}`.toLowerCase();
+
+        // Available FBX texture: explicitly bind it to tire/rubber materials.
+        if (/tire|tyre|rubber|pneu/.test(semanticName)) {
+          return new THREE.MeshStandardMaterial({
+            name: sourceMaterial.name,
+            map: tireTexture,
+            color: "#242527",
+            metalness: 0,
+            roughness: 0.82,
+          });
+        }
 
         // 1. Car body paint
         if (
@@ -175,7 +180,7 @@ function CarModel({
     clone.updateMatrixWorld(true);
 
     return clone;
-  }, [source, isFbx, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [source, tireTexture, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Instant color change without re-cloning geometry */
   useEffect(() => {
@@ -459,7 +464,4 @@ export default function HeroScene() {
   );
 }
 
-useLoader.preload(
-  DEFAULT_MODEL_URL.toLowerCase().endsWith(".fbx") ? FBXLoader : (GLTFLoader as any),
-  DEFAULT_MODEL_URL
-);
+useLoader.preload(FBXLoader, DEFAULT_MODEL_URL);
